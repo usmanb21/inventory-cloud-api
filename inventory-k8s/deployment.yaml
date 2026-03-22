@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: inventory-api
+  namespace: inventory-app
 spec:
   replicas: 1
   selector:
@@ -13,7 +14,10 @@ spec:
         app: inventory-api
     spec:
       containers:
-      - name: inventory-api
-        image: usman212/inventory-cloud-api:latest
-        ports:
-        - containerPort: 80
+        - name: inventory-api
+          image: usman212/inventory-api:v3
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ConnectionStrings__DefaultConnection
+              value: "Server=sqlserver;Database=InventoryDb;User Id=sa;Password=YourStrong!Pass123;TrustServerCertificate=True;Encrypt=False"
