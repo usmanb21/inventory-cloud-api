@@ -1,7 +1,7 @@
 var builder = WebApplication.CreateBuilder(args);
 
-// 🔥 FORCE Azure port correctly
-var port = Environment.GetEnvironmentVariable("WEBSITES_PORT") ?? "8080";
+// 🔥 Azure uses PORT (NOT WEBSITES_PORT)
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 
 builder.WebHost.ConfigureKestrel(options =>
 {
