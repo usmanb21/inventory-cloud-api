@@ -1,32 +1,49 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-// FORCE REBUILD 2026-04-20
+using Microsoft.Identity.Web;
+using Microsoft.EntityFrameworkCore;
+using inventory_cloud_api.Data;
+using inventory_cloud_api.Middleware;
+using Serilog;
+
+// FORCE REBUILD 2026-04-26
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateLogger();
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Host.UseSerilog();
+
 // Add services
 builder.Services.AddControllers();
+
+// DbContext
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection")
+    ));
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo
+    options.AddSecurityDefinition("oauth2", new OpenApiSecurityScheme
     {
-        Title = "Test API",
-        Version = "v1"
-    });
-
-    // 🔐 REQUIRED FOR AUTHORIZE BUTTON
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Description = "JWT Authorization header using Bearer scheme",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT"
+        Type = SecuritySchemeType.OAuth2,
+        Flows = new OpenApiOAuthFlows
+        {
+            AuthorizationCode = new OpenApiOAuthFlow
+            {
+                AuthorizationUrl = new Uri("https://login.microsoftonline.com/3c21b5f0-0af8-4d57-a2bf-ba61c165cfd7/oauth2/v2.0/authorize"),
+                TokenUrl = new Uri("https://login.microsoftonline.com/3c21b5f0-0af8-4d57-a2bf-ba61c165cfd7/oauth2/v2.0/token"),
+                Scopes = new Dictionary<string, string>
+                {
+                    { "api://b72268e4-116d-4f04-b4a1-cd6a95567bd7/access_as_user", "Access API" }
+                }
+            }
+        }
     });
 
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -37,31 +54,46 @@ builder.Services.AddSwaggerGen(options =>
                 Reference = new OpenApiReference
                 {
                     Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
+                    Id = "oauth2"
                 }
             },
-            new string[] {}
+            new[] { "api://b72268e4-116d-4f04-b4a1-cd6a95567bd7/access_as_user" }
         }
     });
 });
 
-// Auth (even dummy config will still show button)
+// Auth
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer();
+    .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"));
 
 builder.Services.AddAuthorization();
+
+// Health checks
+builder.Services.AddHealthChecks()
+    .AddSqlServer(
+        builder.Configuration
+            .GetConnectionString("DefaultConnection")!
+    );
 
 var app = builder.Build();
 
 // Middleware
 app.UseSwagger();
-app.UseSwaggerUI();
+app.UseMiddleware<ExceptionMiddleware>();
+
+app.UseSwaggerUI(options =>
+{
+    options.OAuthClientId("f561c4ef-a529-4adb-84b2-a3bb96a61e86");
+    options.OAuthUsePkce();
+    options.OAuthScopes("api://b72268e4-116d-4f04-b4a1-cd6a95567bd7/access_as_user");
+});
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 
-app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }));
+app.MapHealthChecks("/health").AllowAnonymous();
+app.MapGet("/", () => "RUNNING OK").AllowAnonymous();
 
 app.Run();
