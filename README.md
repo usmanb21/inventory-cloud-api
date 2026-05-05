@@ -26,6 +26,8 @@ A cloud-native inventory management system with enterprise-grade Azure security,
 
 ## 🏗️ Architecture
 
+![Architecture](docs/stockflow-api-architecture.svg)
+
 ```
 GitHub Push
 
